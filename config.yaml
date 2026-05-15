@@ -1,0 +1,92 @@
+subreddits:
+  - ChinaTravel
+  - travel
+  - solotravel
+  - digitalnomad
+  - onebag
+  - backpacking
+  - shanghai
+  - beijing
+  - chengdu
+
+keyword_groups:
+  itinerary:
+    - china itinerary
+    - first time china
+    - china trip
+    - china travel plan
+    - beijing xi'an shanghai
+    - beijing xian shanghai
+    - shanghai suzhou hangzhou
+    - chengdu itinerary
+    - china route
+    - 10 days china
+    - 14 days china
+  payment_apps:
+    - alipay china
+    - wechat pay china
+    - foreign card china
+    - china payment
+    - china apps
+    - china esim
+    - china sim card
+    - vpn china travel
+    - google maps china
+  transport:
+    - china high speed rail
+    - china train station
+    - 12306 foreigner
+    - trip.com china train
+    - beijing south station
+    - shanghai hongqiao
+    - xi'an north
+    - chengdu east
+  entry:
+    - china visa free transit
+    - 240 hour china
+    - china transit visa
+    - china visa free
+    - china entry
+    - china arrival card
+  hotel_arrival:
+    - china hotel foreigner
+    - hotel location china
+    - foreigners hotel china
+    - china hotel check in
+    - chinese address taxi
+
+exclude_keywords:
+  - politics
+  - geopolitical
+  - geopolitics
+  - taiwan
+  - war
+  - covid
+  - news
+  - immigration debate
+  - moving to china
+  - job in china
+  - teaching english
+  - relationship
+  - passport renewal
+  - embassy
+  - scam story
+
+scoring_rules:
+  default_hours: 72
+  max_post_age_hours: 168
+  preferred_comment_max: 30
+  comment_soft_max: 80
+  min_opportunity_score: 50
+  top_results: 15
+
+website_links:
+  links:
+    "Advanced China Trip Check": "https://chinatripreview.com/itinerary-review.html"
+    "Blog Guides": "https://chinatripreview.com/blog.html"
+    "China Digital Survival Kit": "https://chinatripreview.com/china-digital-survival-kit.html"
+    "China High-Speed Rail & Transport Guide": "https://chinatripreview.com/china-high-speed-rail-transport-guide.html"
+    "China Entry & Visa-Free Transit Guide": "https://chinatripreview.com/china-entry-visa-free-transit-guide.html"
+    "Is Your China Itinerary Too Rushed": "https://chinatripreview.com/blog/china-itinerary-too-rushed.html"
+    "China Travel Phone Setup": "https://chinatripreview.com/blog/china-travel-phone-setup-before-arrival.html"
+    "High-Speed Rail as a Foreigner": "https://chinatripreview.com/blog/china-high-speed-rail-foreigner-guide.html"
