@@ -77,16 +77,5 @@ scoring_rules:
   max_post_age_hours: 168
   preferred_comment_max: 30
   comment_soft_max: 80
-  min_opportunity_score: 50
+  min_research_score: 50
   top_results: 15
-
-website_links:
-  links:
-    "Advanced China Trip Check": "https://chinatripreview.com/itinerary-review.html"
-    "Blog Guides": "https://chinatripreview.com/blog.html"
-    "China Digital Survival Kit": "https://chinatripreview.com/china-digital-survival-kit.html"
-    "China High-Speed Rail & Transport Guide": "https://chinatripreview.com/china-high-speed-rail-transport-guide.html"
-    "China Entry & Visa-Free Transit Guide": "https://chinatripreview.com/china-entry-visa-free-transit-guide.html"
-    "Is Your China Itinerary Too Rushed": "https://chinatripreview.com/blog/china-itinerary-too-rushed.html"
-    "China Travel Phone Setup": "https://chinatripreview.com/blog/china-travel-phone-setup-before-arrival.html"
-    "High-Speed Rail as a Foreigner": "https://chinatripreview.com/blog/china-high-speed-rail-foreigner-guide.html"

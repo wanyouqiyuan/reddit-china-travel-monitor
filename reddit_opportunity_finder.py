@@ -280,6 +280,11 @@ def pain_point(post: Post, category: str) -> str:
     return "Low intent or weak fit for a helpful reply."
 
 
+def detected_topic(post: Post, category: str) -> str:
+    topic = pain_point(post, category)
+    return topic.replace("User ", "").replace("Route ", "Route ")
+
+
 def score_post(post: Post, category: str, groups: list[str], config: dict[str, Any]) -> dict[str, Any]:
     rules = config["scoring_rules"]
     blob = text_blob(post)
@@ -298,7 +303,7 @@ def score_post(post: Post, category: str, groups: list[str], config: dict[str, A
     pain_terms = ["confused", "worried", "stuck", "help", "advice", "too rushed", "first time", "possible", "?"]
     pain_point_score = min(20, 6 + sum(3 for term in pain_terms if term in blob))
 
-    service_fit_map = {
+    research_fit_map = {
         "Itinerary Review": 20,
         "Payment / Apps": 16,
         "Transport": 16,
@@ -307,22 +312,22 @@ def score_post(post: Post, category: str, groups: list[str], config: dict[str, A
         "Travel Prep": 12,
         "Low Value / Skip": 3,
     }
-    service_fit_score = service_fit_map.get(category, 3)
+    research_fit_score = research_fit_map.get(category, 3)
 
     if comments <= rules["preferred_comment_max"]:
-        reply_opportunity_score = 10
+        discussion_window_score = 10
     elif comments <= rules["comment_soft_max"]:
-        reply_opportunity_score = 7
+        discussion_window_score = 7
     elif comments < 200:
-        reply_opportunity_score = 4
+        discussion_window_score = 4
     else:
-        reply_opportunity_score = 1
+        discussion_window_score = 1
 
     hours_old = age_hours(post)
     if hours_old <= 24:
-        reply_opportunity_score = min(10, reply_opportunity_score + 1)
+        discussion_window_score = min(10, discussion_window_score + 1)
     elif hours_old > rules["default_hours"]:
-        reply_opportunity_score = max(1, reply_opportunity_score - 2)
+        discussion_window_score = max(1, discussion_window_score - 2)
 
     risk_score = 10
     if category == "Entry / Visa":
@@ -332,36 +337,36 @@ def score_post(post: Post, category: str, groups: list[str], config: dict[str, A
     if comments >= 200:
         risk_score = min(risk_score, 6)
 
-    cta_fit_score = 4
+    topic_clarity_score = 4
     if category == "Itinerary Review" and any(term in blob for term in ["review", "check", "too rushed", "reasonable", "help"]):
-        cta_fit_score = 10
+        topic_clarity_score = 10
     elif category in {"Payment / Apps", "Travel Prep"} and any(
         term in blob for term in ["checklist", "prepare", "setup", "what apps", "before arrival"]
     ):
-        cta_fit_score = 8
+        topic_clarity_score = 8
     elif category in {"Payment / Apps", "Transport", "Hotel / Arrival"}:
-        cta_fit_score = 6
+        topic_clarity_score = 6
     elif category == "Entry / Visa":
-        cta_fit_score = 3
+        topic_clarity_score = 3
 
     total = min(
         100,
         relevance_score
         + pain_point_score
-        + service_fit_score
-        + reply_opportunity_score
+        + research_fit_score
+        + discussion_window_score
         + risk_score
-        + cta_fit_score,
+        + topic_clarity_score,
     )
 
     return {
         "relevance_score": relevance_score,
         "pain_point_score": pain_point_score,
-        "service_fit_score": service_fit_score,
-        "reply_opportunity_score": reply_opportunity_score,
+        "research_fit_score": research_fit_score,
+        "discussion_window_score": discussion_window_score,
         "risk_score": risk_score,
-        "cta_fit_score": cta_fit_score,
-        "opportunity_score": int(total),
+        "topic_clarity_score": topic_clarity_score,
+        "research_score": int(total),
     }
 
 
@@ -373,119 +378,34 @@ def risk_level(risk_score: int) -> str:
     return "High"
 
 
-def cta_level(post: Post, category: str, scores: dict[str, Any]) -> str:
-    blob = text_blob(post)
-    if scores["risk_score"] <= 4 or post.num_comments >= 200:
-        return "Avoid replying"
-    if category == "Itinerary Review" and scores["cta_fit_score"] >= 9 and post.num_comments <= 80:
-        return "Service possible"
-    if category in {"Payment / Apps", "Travel Prep"} and scores["cta_fit_score"] >= 8 and post.num_comments <= 80:
-        return "Checklist possible"
-    if scores["opportunity_score"] >= 75 and has_question_intent(blob) and post.num_comments <= 80:
-        return "Soft mention only"
-    return "No link"
-
-
-def best_internal_link(category: str, post: Post, config: dict[str, Any]) -> str:
-    links = config["website_links"]["links"]
-    blob = text_blob(post)
-
-    if category == "Itinerary Review":
-        if "rushed" in blob:
-            label = "Is Your China Itinerary Too Rushed"
-        else:
-            label = "Advanced China Trip Check"
-    elif category == "Payment / Apps":
-        if "phone" in blob or "sim" in blob or "esim" in blob:
-            label = "China Travel Phone Setup"
-        else:
-            label = "China Digital Survival Kit"
-    elif category == "Transport":
-        if "foreigner" in blob or "12306" in blob:
-            label = "High-Speed Rail as a Foreigner"
-        else:
-            label = "China High-Speed Rail & Transport Guide"
-    elif category == "Entry / Visa":
-        label = "China Entry & Visa-Free Transit Guide"
-    elif category == "Hotel / Arrival":
-        label = "Blog Guides"
-    else:
-        return "None"
-    return f"{label}: {links[label]}"
-
-
-def draft_reply(post: Post, category: str, cta: str) -> str:
-    blob = text_blob(post)
-
-    if category == "Itinerary Review":
-        if "chengdu" in blob and ("10 days" in blob or "first time" in blob):
-            reply = (
-                "This can work on paper, but Chengdu is the part I would question if the trip is only around "
-                "10 days. The train or flight time is only one piece of it; hotel checkout, station security, "
-                "arrival transfers, and check-in can make each move take most of a day. For a first China route, "
-                "Beijing to Xi'an to Shanghai is usually a cleaner spine, then add Chengdu only if you have closer "
-                "to 12-14 days or a specific reason to prioritize it."
-            )
-        else:
-            reply = (
-                "I would sanity-check the number of city changes before adding more stops. China is easy to move "
-                "around in once you are set up, but station transfers, security, and hotel logistics add friction. "
-                "If this is a first trip, keep the route anchored around the places you care about most and leave "
-                "some slack for one slower day in each major city."
-            )
-    elif category == "Payment / Apps":
-        reply = (
-            "Set up the practical stuff before you land: Alipay or WeChat Pay with a foreign card, a working data "
-            "plan, offline copies of hotel addresses in Chinese, and a backup payment method. The biggest issue is "
-            "not one single app failing; it is arriving tired and needing payments, maps, messaging, and taxi details "
-            "all at once. Test what you can before departure and keep screenshots of key addresses."
-        )
-    elif category == "Transport":
-        reply = (
-            "For high-speed rail, build in more buffer than the train duration suggests. Big stations can take time "
-            "to enter, security is normal, and some stations are far from the city center. If you are using Trip.com "
-            "or 12306, make sure the passport details match exactly and check which station you booked, especially "
-            "in Beijing, Shanghai, Xi'an, and Chengdu."
-        )
-    elif category == "Entry / Visa":
-        reply = (
-            "Be careful with this one and verify it against official sources and your airline before booking. Transit "
-            "and visa-free rules can depend on nationality, routing, port of entry, and whether your onward ticket "
-            "qualifies. I would not rely only on Reddit answers for the final decision; use the thread to spot issues, "
-            "then confirm the rule that applies to your exact itinerary."
-        )
-    elif category == "Hotel / Arrival":
-        reply = (
-            "The arrival details matter more than people expect. Keep the hotel name, full Chinese address, and phone "
-            "number saved offline, and check whether the hotel regularly accepts foreign guests. If you arrive late, "
-            "having the address in Chinese and a clear transport plan from the airport or station can save a lot of "
-            "friction."
-        )
-    else:
-        reply = (
-            "I would narrow this down to the exact city, arrival date, and what you are trying to solve first. China "
-            "travel advice gets much better when the question includes route, trip length, budget level, and whether "
-            "you already have payment and data set up."
-        )
-
-    if cta == "Soft mention only":
-        reply += " A simple checklist is useful here, but I would sort the core plan first before adding more details."
-    elif cta == "Checklist possible":
-        reply += " A pre-arrival checklist would fit this kind of question well."
-    elif cta == "Service possible":
-        reply += " This is the kind of itinerary where a second-pass route check can catch the hidden transfer time."
-
-    return reply
-
-
-def why_reply(post: Post, category: str, scores: dict[str, Any]) -> str:
-    if scores["opportunity_score"] >= 80:
-        return "Specific travel-planning intent, good fit, and still early enough to add useful advice."
+def why_research(post: Post, category: str, scores: dict[str, Any]) -> str:
+    if scores["research_score"] >= 80:
+        return "Specific travel-planning intent, clear topic fit, and recent enough to be useful for topic monitoring."
     if category in {"Payment / Apps", "Transport", "Hotel / Arrival"}:
-        return "Concrete operational question where a practical, non-promotional reply can help."
+        return "Concrete operational question that may reveal recurring planning friction."
     if category == "Entry / Visa":
-        return "Useful only with cautious framing and official-source caveats."
-    return "Moderate relevance; reply only if the thread is still active and not already answered."
+        return "Useful only as a research signal because official-source verification is required."
+    return "Moderate relevance for topic monitoring; review manually before keeping."
+
+
+def manual_review_notes(post: Post, category: str, scores: dict[str, Any]) -> str:
+    return (
+        f"{why_research(post, category, scores)} "
+        f"Score parts: relevance {scores['relevance_score']}, pain {scores['pain_point_score']}, "
+        f"fit {scores['research_fit_score']}, discussion window {scores['discussion_window_score']}, "
+        f"safety {scores['risk_score']}, topic clarity {scores['topic_clarity_score']}."
+    )
+
+
+def risk_notes(post: Post, category: str, scores: dict[str, Any]) -> str:
+    notes = [f"Risk level: {risk_level(scores['risk_score'])}."]
+    if category == "Entry / Visa":
+        notes.append("Entry and transit topics require official-source verification.")
+    if post.num_comments >= 200:
+        notes.append("High comment count may indicate a noisy or high-conflict thread.")
+    if scores["risk_score"] <= 5:
+        notes.append("Manual review should discard this item if it touches legal, political, or sensitive personal issues.")
+    return " ".join(notes)
 
 
 def analyze_posts(
@@ -529,10 +449,9 @@ def analyze_posts(
             category = classify_post(post, groups)
 
         scores = score_post(post, category, groups, config)
-        if scores["opportunity_score"] < rules["min_opportunity_score"]:
+        if scores["research_score"] < rules["min_research_score"]:
             continue
 
-        cta = cta_level(post, category, scores)
         row = {
             "date": utc_now().date().isoformat(),
             "subreddit": post.subreddit,
@@ -544,44 +463,36 @@ def analyze_posts(
             "num_comments": post.num_comments,
             "category": category,
             "matched_keyword_group": ", ".join(groups) if groups else "heuristic",
-            "opportunity_score": scores["opportunity_score"],
-            "cta_level": cta,
-            "risk_level": risk_level(scores["risk_score"]),
-            "best_internal_link": "None" if cta == "Avoid replying" else best_internal_link(category, post, config),
-            "detected_pain_point": pain_point(post, category),
-            "why_this_is_worth_replying": why_reply(post, category, scores),
-            "draft_reply": draft_reply(post, category, cta),
-            "notes": (
-                f"Score parts: relevance {scores['relevance_score']}, pain {scores['pain_point_score']}, "
-                f"fit {scores['service_fit_score']}, reply window {scores['reply_opportunity_score']}, "
-                f"safety {scores['risk_score']}, CTA {scores['cta_fit_score']}. "
-                "Draft intentionally contains no URL."
-            ),
+            "research_score": scores["research_score"],
+            "detected_topic": detected_topic(post, category),
+            "why_this_may_be_useful_for_research": why_research(post, category, scores),
+            "manual_review_notes": manual_review_notes(post, category, scores),
+            "risk_notes": risk_notes(post, category, scores),
             "status": "pending",
         }
         rows.append(row)
 
-    rows.sort(key=lambda row: (row["opportunity_score"], -row["age_hours"]), reverse=True)
+    rows.sort(key=lambda row: (row["research_score"], -row["age_hours"]), reverse=True)
     return rows[:top], processed_posts
 
 
 def write_markdown(rows: list[dict[str, Any]], output_path: Path) -> None:
     lines: list[str] = []
-    title = f"Reddit China Travel Opportunities - {utc_now().date().isoformat()}"
+    title = f"Reddit China Travel Topic Monitor - {utc_now().date().isoformat()}"
     lines.append(title)
     lines.append("=" * len(title))
     lines.append("")
-    lines.append("Safety note: drafts are for manual review only. Do not auto-comment, auto-DM, vote, or post links.")
+    lines.append("Safety note: read-only research notes. Do not auto-comment, auto-DM, vote, post, or submit links.")
     lines.append("")
 
     if not rows:
-        lines.append("No matching opportunities found for this run.")
+        lines.append("No matching topic-monitoring items found for this run.")
         lines.append("")
 
     for idx, row in enumerate(rows, start=1):
         lines.extend(
             [
-                f"# {idx}. {row['title']}",
+                f"# {idx}. Title: {row['title']}",
                 "",
                 f"Subreddit: r/{row['subreddit']}",
                 f"URL: {row['url']}",
@@ -589,18 +500,13 @@ def write_markdown(rows: list[dict[str, Any]], output_path: Path) -> None:
                 f"Age: {row['age_hours']} hours",
                 f"Reddit score: {row['reddit_score']}",
                 f"Comment count: {row['num_comments']}",
-                f"Opportunity score: {row['opportunity_score']}",
+                f"Research score: {row['research_score']}",
                 f"Category: {row['category']}",
-                f"CTA level: {row['cta_level']}",
-                f"Risk level: {row['risk_level']}",
-                f"Best internal link: {row['best_internal_link']}",
-                f"Detected pain point: {row['detected_pain_point']}",
-                f"Why this is worth replying: {row['why_this_is_worth_replying']}",
-                "Suggested reply:",
-                "",
-                row["draft_reply"],
-                "",
-                f"Notes: {row['notes']}",
+                f"Detected topic: {row['detected_topic']}",
+                f"Why this may be useful for research: {row['why_this_may_be_useful_for_research']}",
+                f"Manual review notes: {row['manual_review_notes']}",
+                f"Risk notes: {row['risk_notes']}",
+                f"Status: {row['status']}",
                 "",
             ]
         )
@@ -620,13 +526,10 @@ def write_csv(rows: list[dict[str, Any]], output_path: Path) -> None:
         "num_comments",
         "category",
         "matched_keyword_group",
-        "opportunity_score",
-        "cta_level",
-        "risk_level",
-        "best_internal_link",
-        "detected_pain_point",
-        "draft_reply",
-        "notes",
+        "research_score",
+        "detected_topic",
+        "manual_review_notes",
+        "risk_notes",
         "status",
     ]
 
@@ -644,8 +547,8 @@ def write_csv(rows: list[dict[str, Any]], output_path: Path) -> None:
 def export_outputs(rows: list[dict[str, Any]]) -> tuple[Path, Path]:
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     stamp = utc_now().date().isoformat()
-    markdown_path = OUTPUT_DIR / f"reddit-opportunities-{stamp}.md"
-    csv_path = OUTPUT_DIR / f"reddit-opportunities-{stamp}.csv"
+    markdown_path = OUTPUT_DIR / f"reddit-topic-monitor-{stamp}.md"
+    csv_path = OUTPUT_DIR / f"reddit-topic-monitor-{stamp}.csv"
     write_markdown(rows, markdown_path)
     write_csv(rows, csv_path)
     return markdown_path, csv_path
@@ -760,10 +663,10 @@ def fetch_reddit_posts(config: dict[str, Any], limit: int) -> list[Post]:
 
 def parse_args(config: dict[str, Any]) -> argparse.Namespace:
     rules = config["scoring_rules"]
-    parser = argparse.ArgumentParser(description="Find Reddit China travel reply opportunities.")
+    parser = argparse.ArgumentParser(description="Monitor public Reddit China travel topics for private read-only research.")
     parser.add_argument("--hours", type=int, default=rules["default_hours"], help="Only include posts newer than this many hours.")
     parser.add_argument("--limit", type=int, default=80, help="Posts to read from each subreddit via subreddit.new().")
-    parser.add_argument("--top", type=int, default=rules["top_results"], help="Maximum number of opportunities to export.")
+    parser.add_argument("--top", type=int, default=rules["top_results"], help="Maximum number of topic-monitoring items to export.")
     parser.add_argument("--include-seen", action="store_true", help="Include posts already recorded in data/seen_posts.json.")
     parser.add_argument("--dry-run", action="store_true", help="Generate outputs but do not update seen_posts.json.")
     parser.add_argument("--demo", action="store_true", help="Use built-in sample posts and do not call Reddit.")
@@ -794,7 +697,7 @@ def main() -> int:
     mode = "demo" if args.demo else "live"
     print(f"Mode: {mode}")
     print(f"Fetched posts: {len(posts)}")
-    print(f"Exported opportunities: {len(rows)}")
+    print(f"Exported topic-monitoring items: {len(rows)}")
     print(f"Markdown: {markdown_path}")
     print(f"CSV: {csv_path}")
     if args.demo:
